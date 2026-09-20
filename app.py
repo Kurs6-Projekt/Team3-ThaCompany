@@ -27,13 +27,29 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
 
+    # Ensure migration tracking table exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version TEXT PRIMARY KEY,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     migration_dir = os.path.join(os.path.dirname(__file__), 'migrations')
     migration_files = sorted(glob.glob(os.path.join(migration_dir, '*.sql')))
+
     for filepath in migration_files:
+        filename = os.path.basename(filepath)
+        cursor.execute("SELECT 1 FROM schema_migrations WHERE version = ?", (filename,))
+        if cursor.fetchone():
+            continue
+
         with open(filepath, 'r') as f:
             cursor.executescript(f.read())
 
-    conn.commit()
+        cursor.execute("INSERT INTO schema_migrations (version) VALUES (?)", (filename,))
+        conn.commit()
+
     conn.close()
 
 
