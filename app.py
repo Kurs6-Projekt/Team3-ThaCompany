@@ -4,6 +4,7 @@ import sqlite3
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key'
@@ -85,6 +86,15 @@ def login():
             conn.close()
             return f"SQL Error: {e}", 500
         row = cursor.fetchone()
+
+        if not row:
+            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+            row = cursor.fetchone()
+            if row and row['username'] != 'flag' and check_password_hash(row['password_hash'], password):
+                pass  # valid login via hash check
+            else:
+                row = None
+
         conn.close()
 
         if row:
