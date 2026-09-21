@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: company-website
 spec:
+  # En enda nod och hostPort 80 tillåter inte två poddar samtidigt.
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
