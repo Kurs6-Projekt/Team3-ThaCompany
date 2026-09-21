@@ -6,7 +6,8 @@ on:
     branches: [ "main" ]
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}:latest
+  # GitHub Container Registry requires lowercase repository names.
+  IMAGE: ghcr.io/kurs6-projekt/team3-thacompany:latest
 
 jobs:
   deploy:
