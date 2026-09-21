@@ -32,3 +32,11 @@ def test_about_page(client):
 def test_dashboard_redirects_when_not_logged_in(client):
     response = client.get('/dashboard', follow_redirects=False)
     assert response.status_code == 302
+
+
+def test_healthz_endpoint(client):
+    response = client.get('/healthz')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'healthy'
+    assert data['db'] == 'connected'
