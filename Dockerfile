@@ -12,4 +12,4 @@ ENV FLASK_APP=company_website
 
 EXPOSE 7000
 
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:7000", "wsgi:app"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:7000", "--access-logfile", "-", "wsgi:app"]
