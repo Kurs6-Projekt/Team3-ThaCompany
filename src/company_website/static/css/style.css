@@ -31,6 +31,9 @@
     --blue-500: #3b82f6;
     --blue-600: #2563eb;
     --blue-700: #1d4ed8;
+    --bg-notes: #fffbe6;
+    --border-notes: #ffc107;
+    --text-notes: #1f2937;
 }
 
 html.dark-mode {
@@ -57,6 +60,9 @@ html.dark-mode {
     --shadow-card: 0 2px 8px rgba(0,0,0,0.3);
     --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.4);
     --shadow-toast: 0 4px 12px rgba(0,0,0,0.4);
+    --bg-notes: #2a2a1a;
+    --border-notes: #b8860b;
+    --text-notes: #e2e8f0;
 }
 
 body {
@@ -524,6 +530,60 @@ body.is-authenticated {
 
 .site-footer p {
     margin: 0;
+}
+
+/* Employee grid */
+.employee-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.employee-card {
+    padding: 1rem;
+    border: 1px solid var(--border-card);
+    border-radius: 8px;
+    background: var(--bg-card);
+    transition: box-shadow 0.15s;
+}
+
+.employee-card:hover {
+    box-shadow: var(--shadow-card);
+}
+
+.employee-card h3 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.1rem;
+}
+
+.employee-card h3 a {
+    color: var(--blue-600);
+    text-decoration: none;
+}
+
+.employee-card h3 a:hover {
+    text-decoration: underline;
+}
+
+.employee-role {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.internal-notes {
+    margin-top: 24px;
+    padding: 16px;
+    background: var(--bg-notes);
+    border-left: 4px solid var(--border-notes);
+    border-radius: 4px;
+    color: var(--text-notes);
+}
+
+.internal-notes h3 {
+    margin-top: 0;
+    color: var(--text-notes);
 }
 
 /* Utilities */

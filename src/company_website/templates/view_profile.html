@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ user.first_name }} {{ user.last_name }} - Placeholder Industries{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 100%;">
+    <h1 class="card-header" style="text-align: left;">
+        {{ user.first_name }} {{ user.last_name }}
+        <span style="font-size: 0.6em; color: #666; display: block; margin-top: 4px;">{{ user.role }}</span>
+    </h1>
+    <div class="profile-details">
+        <p><strong>Username:</strong> {{ user.username }}</p>
+        <p><strong>Email:</strong> {{ user.email or 'N/A' }}</p>
+        <p><strong>About:</strong></p>
+        <p style="white-space: pre-wrap;">{{ user.about or 'No bio provided.' }}</p>
+
+        {% if user.id == current_user.id %}
+        <div class="internal-notes">
+            <h3>Internal Notes</h3>
+            <p style="white-space: pre-wrap;">{{ user.internal_notes or 'No internal notes.' }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% if user.id == current_user.id %}
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('main.edit_profile', id=user.id) }}" class="btn btn-primary">Edit Profile</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

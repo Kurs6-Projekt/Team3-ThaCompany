@@ -5,6 +5,13 @@
 {% block content %}
 <div class="card" style="max-width: 100%;">
     <h1 class="card-header" style="text-align: left;">Employees</h1>
-    <p>The employee directory will appear here.</p>
+    <div class="employee-grid">
+        {% for employee in employees %}
+        <div class="employee-card">
+            <h3><a href="{{ url_for('main.view_profile', id=employee.id) }}">{{ employee.name or employee.username }}</a></h3>
+            <p class="employee-role">{{ employee.role or 'Employee' }}</p>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

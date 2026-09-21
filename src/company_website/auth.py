@@ -20,7 +20,17 @@ def load_user(user_id):
     row = cursor.fetchone()
     conn.close()
     if row:
-        return User(str(row['id']), row['username'], row['password_hash'])
+        return User(
+            str(row['id']),
+            row['username'],
+            row['password_hash'],
+            row['first_name'],
+            row['last_name'],
+            row['email'],
+            row['about'],
+            row['role'],
+            row['internal_notes']
+        )
     return None
 
 
@@ -53,7 +63,17 @@ def login():
         conn.close()
 
         if row:
-            user = User(str(row['id']), row['username'], row['password_hash'])
+            user = User(
+                str(row['id']),
+                row['username'],
+                row['password_hash'],
+                row['first_name'],
+                row['last_name'],
+                row['email'],
+                row['about'],
+                row['role'],
+                row['internal_notes']
+            )
             login_user(user)
             flash('Login successful!', 'success')
             return render_template('login.html', user=user)

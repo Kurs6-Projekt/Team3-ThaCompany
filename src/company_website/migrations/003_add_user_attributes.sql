@@ -1,0 +1,6 @@
+ALTER TABLE users ADD COLUMN first_name TEXT;
+ALTER TABLE users ADD COLUMN last_name TEXT;
+ALTER TABLE users ADD COLUMN email TEXT;
+ALTER TABLE users ADD COLUMN about TEXT;
+ALTER TABLE users ADD COLUMN role TEXT;
+ALTER TABLE users ADD COLUMN internal_notes TEXT;
