@@ -43,7 +43,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.HEADSCALE_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{
-                  "user": ${{ vars.HEADSCALE_USER_ID }},
+                  "user": "${{ vars.HEADSCALE_USER_ID }}",
                   "ephemeral": true,
                   "reusable": false,
                   "expiration": "'"$EXPIRATION"'",
