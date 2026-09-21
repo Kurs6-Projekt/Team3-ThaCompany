@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: web
-        image: company-website:latest
-        imagePullPolicy: IfNotPresent
+        image: ${DEPLOY_IMAGE}
+        imagePullPolicy: Always
         ports:
         - containerPort: 7000
           hostPort: 80

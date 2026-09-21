@@ -1,0 +1,89 @@
+name: Deploy to K3s
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}:latest
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # --- Build & push to GHCR ---
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          docker build -t ${{ env.IMAGE }} .
+          docker push ${{ env.IMAGE }}
+
+      # --- Network connectivity to K3s node ---
+      - name: Generate Ephemeral Headscale Key
+        id: generate_key
+        run: |
+          EXPIRATION=$(date -u -d '+10 minutes' +%Y-%m-%dT%H:%M:%SZ)
+
+          RESPONSE=$(curl -s -f -X POST "${{ secrets.HEADSCALE_URL }}/api/v1/preauthkey" \
+            -H "Authorization: Bearer ${{ secrets.HEADSCALE_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "user": ${{ vars.HEADSCALE_USER_ID }},
+                  "ephemeral": true,
+                  "reusable": false,
+                  "expiration": "'"$EXPIRATION"'",
+                  "aclTags": ["tag:github-runner"]
+                }')
+
+          EPHEMERAL_KEY=$(echo "$RESPONSE" | jq -r '.preAuthKey.key')
+
+          if [ -z "$EPHEMERAL_KEY" ] || [ "$EPHEMERAL_KEY" == "null" ]; then
+            echo "Error: Failed to retrieve key from Headscale API"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "::add-mask::$EPHEMERAL_KEY"
+          echo "key=$EPHEMERAL_KEY" >> $GITHUB_OUTPUT
+
+      - name: Connect to Headscale Mesh
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ steps.generate_key.outputs.key }}
+          args: --login-server=${{ secrets.HEADSCALE_URL }}
+          version: 1.102.4
+
+      - name: Verify connectivity to K3s node
+        run: |
+          ping -c 3 10.0.${{ vars.TEAM_ID }}.3
+          echo "Tailscale connectivity confirmed"
+
+      # --- Configure kubectl for remote k3s ---
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl get pods -n default
+
+      # --- Deploy to K3s ---
+      - name: Apply manifests and update image
+        run: |
+          export DEPLOY_IMAGE="${{ env.IMAGE }}"
+          envsubst < k8s/deployment.yaml > /tmp/deployment.yaml
+          kubectl apply -f /tmp/deployment.yaml -f k8s/pvc.yaml -f k8s/service.yaml
+          kubectl rollout status deployment/company-website --timeout=120s
