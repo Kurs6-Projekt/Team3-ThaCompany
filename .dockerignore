@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+venv/
+.env
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+
+# Local data & tests
+data/
+tests/
+
+# Deployment configs
+k8s/
+docker-compose.yml
+
+# Docs
+README.md
+AGENT.md

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: company-website
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: company-website
+  template:
+    metadata:
+      labels:
+        app: company-website
+    spec:
+      containers:
+      - name: web
+        image: company-website:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 7000
+          hostPort: 80
+        env:
+        - name: FLASK_DEBUG
+          value: "false"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 7000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 7000
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: company-website-data
