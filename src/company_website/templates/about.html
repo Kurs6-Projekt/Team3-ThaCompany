@@ -11,13 +11,13 @@
         <h1>About</h1>
         <p>This is a basic Flask application.</p>
         <nav>
-            <a href="{{ url_for('index') }}">Home</a>
-            <a href="{{ url_for('about') }}">About</a>
+            <a href="{{ url_for('main.index') }}">Home</a>
+            <a href="{{ url_for('main.about') }}">About</a>
             {% if current_user.is_authenticated %}
-                <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('logout') }}">Logout ({{ current_user.username }})</a>
+                <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('auth.logout') }}">Logout ({{ current_user.username }})</a>
             {% else %}
-                <a href="{{ url_for('login') }}">Login</a>
+                <a href="{{ url_for('auth.login') }}">Login</a>
             {% endif %}
         </nav>
     </div>

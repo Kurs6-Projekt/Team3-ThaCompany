@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    ports:
+      - "7000:7000"
+    environment:
+      - FLASK_DEBUG=false
+    volumes:
+      - app-data:/app/data
+
+volumes:
+  app-data:
