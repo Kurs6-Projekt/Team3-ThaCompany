@@ -1,5 +1,5 @@
-from flask import Blueprint, jsonify, render_template
-from flask_login import login_required
+from flask import Blueprint, jsonify, render_template, redirect, url_for
+from flask_login import login_required, current_user
 from .db import get_db
 
 main_bp = Blueprint('main', __name__)
@@ -7,18 +7,21 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
+    if current_user.is_authenticated:
+        return render_template('home.html')
     return render_template('index.html')
 
 
-@main_bp.route('/about')
-def about():
-    return render_template('about.html')
-
-
-@main_bp.route('/dashboard')
+@main_bp.route('/profile')
 @login_required
-def dashboard():
-    return render_template('dashboard.html')
+def profile():
+    return render_template('profile.html')
+
+
+@main_bp.route('/employees')
+@login_required
+def employees():
+    return render_template('employees.html')
 
 
 @main_bp.route('/healthz')

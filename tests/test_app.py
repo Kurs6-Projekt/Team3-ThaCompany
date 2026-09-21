@@ -24,13 +24,13 @@ def test_login_page(client):
     assert response.status_code == 200
 
 
-def test_about_page(client):
-    response = client.get('/about')
-    assert response.status_code == 200
+def test_profile_redirects_when_not_logged_in(client):
+    response = client.get('/profile', follow_redirects=False)
+    assert response.status_code == 302
 
 
-def test_dashboard_redirects_when_not_logged_in(client):
-    response = client.get('/dashboard', follow_redirects=False)
+def test_employees_redirects_when_not_logged_in(client):
+    response = client.get('/employees', follow_redirects=False)
     assert response.status_code == 302
 
 

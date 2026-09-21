@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Placeholder Industries{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 100%;">
+    <h1 class="card-header" style="text-align: left;">Welcome</h1>
+    <p>Hello, <strong>{{ current_user.username }}</strong>! This is the internal platform for <strong>Placeholder Industries</strong>.</p>
+    <div class="mt-2">
+        <p>Use the sidebar to navigate:</p>
+        <ul>
+            <li><strong>My Profile</strong> — view your account</li>
+            <li><strong>Employees</strong> — browse the team directory</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
