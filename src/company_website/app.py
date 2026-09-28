@@ -1,7 +1,7 @@
 from flask import Flask
 
 from .config import Config
-from .db import init_db
+from .db import init_db, init_legacy_db
 from .auth import auth_bp, login_manager
 from .routes import main_bp
 
@@ -18,5 +18,6 @@ def create_app():
     app.register_blueprint(main_bp)
 
     init_db()
+    init_legacy_db()
 
     return app

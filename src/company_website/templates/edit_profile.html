@@ -7,7 +7,7 @@
     <h1 class="card-header" style="text-align: left;">Edit Profile</h1>
     <p>Editing profile for <strong>{{ user.first_name }} {{ user.last_name }}</strong> ({{ user.username }})</p>
 
-    <form method="POST" action="{{ url_for('main.edit_profile', id=user.id) }}">
+    <form id="profileEditForm" method="POST" action="{{ url_for('main.edit_profile', id=user.id) }}">
         <div class="form-group">
             <label class="form-label" for="first_name">First Name</label>
             <input class="form-input" type="text" id="first_name" name="first_name" value="{{ user.first_name or '' }}">
@@ -32,7 +32,62 @@
             <label class="form-label" for="internal_notes">Internal Notes</label>
             <textarea class="form-input" id="internal_notes" name="internal_notes" rows="5">{{ user.internal_notes or '' }}</textarea>
         </div>
-        <button type="submit" class="btn btn-primary btn-block">Save Changes</button>
+        <div class="form-group">
+            <label class="form-label" for="email_signature">Email Signature</label>
+            <p class="form-help">Set the signature that will appear at the end of your emails.</p>
+            <p class="form-help">Available variables: firstname, lastname, email, role, company.</p>
+            <textarea class="form-input" id="email_signature" name="email_signature" rows="6" maxlength="200">{{ user.email_signature }}</textarea>
+        </div>
     </form>
+    <div class="edit-actions">
+        <button type="button" id="previewSignatureButton" data-preview-url="{{ url_for('main.email_preview', id=user.id) }}" class="btn btn-secondary btn-small">Preview Signature</button>
+        <button type="submit" form="profileEditForm" class="btn btn-primary btn-small">Save Changes</button>
+    </div>
+
+    <dialog id="emailPreviewModal" class="email-preview-modal" aria-labelledby="emailPreviewTitle">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+            <h2 id="emailPreviewTitle">Email Signature</h2>
+            <button id="emailPreviewClose" type="button" class="btn btn-secondary">Close</button>
+        </div>
+        <p id="emailPreviewError" role="alert" hidden>Unable to generate the email preview. Please try again.</p>
+        <pre id="emailPreviewContent" style="white-space: pre-wrap; overflow-wrap: anywhere;"></pre>
+    </dialog>
+    <script>
+        const previewSignatureButton = document.getElementById('previewSignatureButton');
+        const emailSignatureInput = document.getElementById('email_signature');
+        const emailPreviewModal = document.getElementById('emailPreviewModal');
+        const emailPreviewContent = document.getElementById('emailPreviewContent');
+        const emailPreviewError = document.getElementById('emailPreviewError');
+
+        previewSignatureButton.addEventListener('click', async () => {
+            emailPreviewError.hidden = true;
+            emailPreviewContent.textContent = '';
+            const previewData = new FormData();
+            previewData.append('email_template', emailSignatureInput.value);
+
+            try {
+                const response = await fetch(previewSignatureButton.dataset.previewUrl, {
+                    method: 'POST',
+                    body: previewData,
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) throw new Error('Preview request failed');
+                const result = await response.json();
+                emailPreviewContent.textContent = result.preview;
+            } catch (error) {
+                emailPreviewError.hidden = false;
+            }
+
+            emailPreviewModal.showModal();
+        });
+
+        document.getElementById('emailPreviewClose').addEventListener('click', () => {
+            emailPreviewModal.close();
+        });
+
+        emailPreviewModal.addEventListener('click', (event) => {
+            if (event.target === emailPreviewModal) emailPreviewModal.close();
+        });
+    </script>
 </div>
 {% endblock %}

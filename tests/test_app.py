@@ -1,5 +1,7 @@
 import pytest
 from company_website import create_app
+from company_website.models import User
+from company_website.routes import _contains_blocked_email_syntax, _render_email_preview
 
 
 @pytest.fixture
@@ -40,3 +42,23 @@ def test_healthz_endpoint(client):
     data = response.get_json()
     assert data['status'] == 'healthy'
     assert data['db'] == 'connected'
+
+
+def test_email_preview_supports_profile_variables(app):
+    user = User(
+        '1', 'sample', '', first_name='Ada', last_name='Lovelace',
+        email='ada@example.com', role='Engineer'
+    )
+
+    with app.app_context():
+        preview = _render_email_preview(
+            'Hello {{ firstname }} {{ lastname }} ({{ email }}, {{ role }}) - {{ company }}',
+            user,
+        )
+
+    assert preview == 'Hello Ada Lovelace (ada@example.com, Engineer) - Placeholder Industries'
+
+
+@pytest.mark.parametrize('token', ['[]', "''", '()', 'dict', 'request'])
+def test_email_preview_filter_blocks_listed_tokens(token):
+    assert _contains_blocked_email_syntax(f'{{{{ value {token} }}}}')

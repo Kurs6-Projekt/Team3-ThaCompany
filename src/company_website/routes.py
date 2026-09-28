@@ -1,9 +1,35 @@
-from flask import Blueprint, jsonify, render_template, redirect, url_for, request, flash
+import re
+
+from flask import Blueprint, jsonify, render_template, render_template_string, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from .db import get_db
 from .models import User
 
 main_bp = Blueprint('main', __name__)
+COMPANY_NAME = 'Placeholder Industries'
+EMAIL_PREVIEW_MAX_LENGTH = 200
+EMAIL_EXPRESSION_PATTERN = re.compile(r"{{(.*?)}}", re.DOTALL)
+EMAIL_BLOCKED_TOKEN_PATTERN = re.compile(
+    r"\[|\]|\(|\)|''|\"\"|\bdict\b|\brequest\b", re.IGNORECASE
+)
+
+
+def _contains_blocked_email_syntax(template):
+    return any(
+        EMAIL_BLOCKED_TOKEN_PATTERN.search(match.group(1))
+        for match in EMAIL_EXPRESSION_PATTERN.finditer(template)
+    )
+
+
+def _render_email_preview(template, user):
+    return render_template_string(
+        template,
+        firstname=user.first_name or '',
+        lastname=user.last_name or '',
+        email=user.email or '',
+        role=user.role or '',
+        company=COMPANY_NAME,
+    )
 
 
 @main_bp.route('/')
@@ -38,9 +64,37 @@ def view_profile(id):
         row['email'],
         row['about'],
         row['role'],
-        row['internal_notes']
+        row['internal_notes'],
+        row['email_signature'],
     )
     return render_template('view_profile.html', user=user)
+
+
+@main_bp.route('/profiles/<int:id>/email-preview', methods=['POST'])
+@login_required
+def email_preview(id):
+    if str(current_user.id) != str(id):
+        return "Forbidden", 403
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return "User not found", 404
+
+    user = User(
+        str(row['id']), row['username'], row['password_hash'], row['first_name'],
+        row['last_name'], row['email'], row['about'], row['role'], row['internal_notes']
+    )
+    email_template = request.form.get('email_template', '')
+    if len(email_template) > EMAIL_PREVIEW_MAX_LENGTH:
+        return "Email template is too long", 400
+    if _contains_blocked_email_syntax(email_template):
+        return jsonify(error='The signature template contains unsupported syntax.'), 400
+
+    return jsonify(preview=_render_email_preview(email_template, user))
 
 
 @main_bp.route('/profiles/<int:id>/edit', methods=['GET', 'POST'])
@@ -63,7 +117,8 @@ def edit_profile(id):
         row['email'],
         row['about'],
         row['role'],
-        row['internal_notes']
+        row['internal_notes'],
+        row['email_signature'],
     )
 
     if request.method == 'POST':
@@ -73,14 +128,16 @@ def edit_profile(id):
         about = request.form.get('about', '')
         role = request.form.get('role', '')
         internal_notes = request.form.get('internal_notes', '')
+        email_signature = request.form.get('email_signature', user.email_signature)
 
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute('''
             UPDATE users
-            SET first_name = ?, last_name = ?, email = ?, about = ?, role = ?, internal_notes = ?
+            SET first_name = ?, last_name = ?, email = ?, about = ?, role = ?, internal_notes = ?,
+                email_signature = ?
             WHERE id = ?
-        ''', (first_name, last_name, email, about, role, internal_notes, id))
+        ''', (first_name, last_name, email, about, role, internal_notes, email_signature, id))
         conn.commit()
         conn.close()
 

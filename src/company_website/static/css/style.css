@@ -408,6 +408,12 @@ body.is-authenticated {
     color: var(--text-secondary);
 }
 
+.form-help {
+    margin: -0.2rem 0 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
 .form-input {
     width: 100%;
     padding: 0.6rem 0.75rem;
@@ -463,6 +469,19 @@ body.is-authenticated {
     display: block;
     width: 100%;
     text-align: center;
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.edit-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
 }
 
 /* Toast notifications */
@@ -584,6 +603,21 @@ body.is-authenticated {
 .internal-notes h3 {
     margin-top: 0;
     color: var(--text-notes);
+}
+
+/* Email preview modal */
+.email-preview-modal {
+    width: min(600px, calc(100% - 32px));
+    padding: 24px;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.email-preview-modal::backdrop {
+    background: rgba(15, 23, 42, 0.55);
 }
 
 /* Utilities */
