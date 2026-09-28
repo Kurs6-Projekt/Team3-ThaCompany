@@ -57,7 +57,7 @@ jobs:
 
       - name: Sign images with Cosign
         run: |
-          cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
+          cosign sign --yes "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
 
       # --- Network connectivity to K3s node ---
       - name: Generate Ephemeral Headscale Key
