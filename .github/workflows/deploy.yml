@@ -86,5 +86,5 @@ jobs:
         run: |
           export DEPLOY_IMAGE="${{ env.IMAGE }}"
           envsubst < k8s/deployment.yaml > /tmp/deployment.yaml
-          kubectl apply -f /tmp/deployment.yaml -f k8s/pvc.yaml -f k8s/service.yaml
+          kubectl apply -f /tmp/deployment.yaml -f k8s/pvc.yaml -f k8s/service.yaml -f k8s/ingress.yaml
           kubectl rollout status deployment/company-website --timeout=120s

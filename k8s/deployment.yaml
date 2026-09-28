@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: company-website
 spec:
-  # En enda nod och hostPort 80 tillåter inte två poddar samtidigt.
+  # Ingress-nginx owns node port 80; the app is reached through its Service.
   strategy:
     type: Recreate
   replicas: 1
@@ -21,7 +21,6 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 7000
-          hostPort: 80
         env:
         - name: FLASK_DEBUG
           value: "false"
