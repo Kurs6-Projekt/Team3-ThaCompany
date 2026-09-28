@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: company-website
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: company-website.team3.arpa
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: company-website
+            port:
+              number: 7000
