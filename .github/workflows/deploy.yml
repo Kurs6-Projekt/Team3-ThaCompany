@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Checkout Code
@@ -48,6 +49,15 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.0
+        with:
+          cosign-release: 'v2.6.4'
+
+      - name: Sign images with Cosign
+        run: |
+          cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
 
       # --- Network connectivity to K3s node ---
       - name: Generate Ephemeral Headscale Key
