@@ -94,4 +94,5 @@ jobs:
           export GIT_COMMIT="${{ github.sha }}"
           envsubst < k8s/deployment.yaml > /tmp/deployment.yaml
           kubectl apply -f /tmp/deployment.yaml -f k8s/pvc.yaml -f k8s/service.yaml -f k8s/ingress.yaml
+          kubectl delete ingress company-website --ignore-not-found
           kubectl rollout status deployment/company-website --timeout=120s
