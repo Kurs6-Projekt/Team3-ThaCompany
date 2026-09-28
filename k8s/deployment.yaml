@@ -12,8 +12,9 @@ spec:
       app: company-website
   template:
     metadata:
-      labels:
-        app: company-website
+    labels:
+      app: company-website
+      git.commit: ${GIT_COMMIT}
     spec:
       containers:
       - name: web
