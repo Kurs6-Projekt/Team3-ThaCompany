@@ -1,6 +1,6 @@
 import re
 
-from flask import Blueprint, jsonify, render_template, render_template_string, redirect, url_for, request, flash
+from flask import Blueprint, jsonify, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from .db import get_db
 from .models import User
@@ -9,27 +9,26 @@ main_bp = Blueprint('main', __name__)
 COMPANY_NAME = 'Placeholder Industries'
 EMAIL_PREVIEW_MAX_LENGTH = 200
 EMAIL_EXPRESSION_PATTERN = re.compile(r"{{(.*?)}}", re.DOTALL)
-EMAIL_BLOCKED_TOKEN_PATTERN = re.compile(
-    r"\[|\]|\(|\)|''|\"\"|\bdict\b|\brequest\b", re.IGNORECASE
-)
+EMAIL_VARIABLE_PATTERN = re.compile(r"{{\s*(firstname|lastname|email|role|company)\s*}}")
+EMAIL_CONTROL_SYNTAX_PATTERN = re.compile(r"{[%#]|[%#]}")
 
 
 def _contains_blocked_email_syntax(template):
-    return any(
-        EMAIL_BLOCKED_TOKEN_PATTERN.search(match.group(1))
-        for match in EMAIL_EXPRESSION_PATTERN.finditer(template)
-    )
+    expressions = EMAIL_EXPRESSION_PATTERN.finditer(template)
+    if any(not EMAIL_VARIABLE_PATTERN.fullmatch(match.group(0)) for match in expressions):
+        return True
+    return bool(EMAIL_CONTROL_SYNTAX_PATTERN.search(template))
 
 
 def _render_email_preview(template, user):
-    return render_template_string(
-        template,
-        firstname=user.first_name or '',
-        lastname=user.last_name or '',
-        email=user.email or '',
-        role=user.role or '',
-        company=COMPANY_NAME,
-    )
+    values = {
+        'firstname': user.first_name or '',
+        'lastname': user.last_name or '',
+        'email': user.email or '',
+        'role': user.role or '',
+        'company': COMPANY_NAME,
+    }
+    return EMAIL_VARIABLE_PATTERN.sub(lambda match: values[match.group(1)], template)
 
 
 @main_bp.route('/')
@@ -100,6 +99,9 @@ def email_preview(id):
 @main_bp.route('/profiles/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_profile(id):
+    if str(current_user.id) != str(id):
+        return "Forbidden", 403
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE id = ?", (id,))
