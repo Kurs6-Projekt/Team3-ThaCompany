@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 
-from .db import get_db, get_legacy_db
+from .db import get_db
 from .models import User
 
 auth_bp = Blueprint('auth', __name__)
@@ -37,44 +37,22 @@ def load_user(user_id):
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'GET' and current_user.is_authenticated:
+    if current_user.is_authenticated:
         return redirect(url_for('main.index'))
     if request.method == 'POST':
         username = request.form.get('username', '')
         password = request.form.get('password', '')
 
-        conn = get_legacy_db()
+        conn = get_db()
         cursor = conn.cursor()
-        legacy_row = None
-        try:
-            cursor.execute(
-                'SELECT * FROM legacy_users WHERE username = ? AND password_hash = ?',
-                (username, password),
-            )
-            legacy_row = cursor.fetchone()
-        except sqlite3.Error:
-            flash('Invalid username or password.', 'error')
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
         conn.close()
 
-        row = None
-        if legacy_row:
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE username = ?", (legacy_row['username'],))
-            row = cursor.fetchone()
-            conn.close()
-        else:
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-            row = cursor.fetchone()
-            conn.close()
-            if row and row['username'] != 'flag' and check_password_hash(row['password_hash'], password):
-                pass
-            else:
-                row = None
-
-        if row and not row['enabled']:
+        if (not row
+                or row['username'] == 'flag'
+                or not row['enabled']
+                or not check_password_hash(row['password_hash'], password)):
             row = None
 
         if row:
