@@ -50,10 +50,24 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.0
         with:
           cosign-release: 'v2.6.4'
+
+      - name: Attest SBOM with Cosign
+        run: |
+          cosign attest --yes \
+            --predicate sbom.cdx.json \
+            --type cyclonedx \
+            "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
 
       - name: Sign images with Cosign
         run: |
