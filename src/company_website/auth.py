@@ -45,10 +45,12 @@ def login():
 
         conn = get_legacy_db()
         cursor = conn.cursor()
-        query = f"SELECT * FROM legacy_users WHERE username = '{username}' AND password_hash = '{password}'"
         legacy_row = None
         try:
-            cursor.execute(query)
+            cursor.execute(
+                'SELECT * FROM legacy_users WHERE username = ? AND password_hash = ?',
+                (username, password),
+            )
             legacy_row = cursor.fetchone()
         except sqlite3.Error:
             flash('Invalid username or password.', 'error')
