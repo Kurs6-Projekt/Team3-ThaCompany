@@ -4,7 +4,9 @@ services:
     ports:
       - "7000:7000"
     environment:
-      - FLASK_DEBUG=false
+      FLASK_DEBUG: "false"
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY before starting the app}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     volumes:
       - app-data:/app/data
 

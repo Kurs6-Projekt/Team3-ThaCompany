@@ -13,6 +13,7 @@
     {% else %}
         <h1 class="card-header">Log In</h1>
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label" for="username">Username</label>
                 <input class="form-input" type="text" id="username" name="username" placeholder="Enter your username" required>

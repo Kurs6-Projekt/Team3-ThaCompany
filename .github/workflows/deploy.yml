@@ -121,6 +121,15 @@ jobs:
           chmod 600 ~/.kube/config
           kubectl get pods -n default
 
+      - name: Configure application secret
+        env:
+          APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+        run: |
+          kubectl create secret generic company-website-secrets \
+            --namespace=default \
+            --from-literal=SECRET_KEY="$APP_SECRET_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       # --- Deploy to K3s ---
       - name: Apply manifests and update image
         run: |

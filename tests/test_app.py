@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from company_website import create_app
 from company_website.config import Config
@@ -7,6 +9,7 @@ from company_website.routes import _contains_blocked_email_syntax, _render_email
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, 'SECRET_KEY', 'test-only-secret-key')
     monkeypatch.setattr(Config, 'DATABASE', str(tmp_path / 'database.db'))
     monkeypatch.setattr(Config, 'LEGACY_AUTH_DATABASE', str(tmp_path / 'legacy_auth.db'))
     app = create_app()
@@ -78,9 +81,12 @@ def test_email_preview_rejects_jinja_syntax(template):
 
 
 def test_login_rejects_sql_injection(client):
+    page = client.get('/login')
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True)).group(1)
     response = client.post('/login', data={
         'username': "' UNION SELECT 1,password_hash,'x',NULL,NULL,NULL,NULL,NULL,NULL FROM users WHERE username='flag' -- ",
         'password': 'x',
+        'csrf_token': token,
     })
 
     assert response.status_code == 200
@@ -93,6 +99,28 @@ def test_profile_edit_forbids_other_users(client, method):
         session['_user_id'] = '1'
         session['_fresh'] = True
 
-    response = getattr(client, method)('/profiles/4/edit')
+    if method == 'post':
+        page = client.get('/profiles/1/edit')
+        token = re.search(r'name="csrf_token" value="([^"]+)"', page.get_data(as_text=True)).group(1)
+        response = client.post('/profiles/4/edit', data={'csrf_token': token})
+    else:
+        response = client.get('/profiles/4/edit')
 
     assert response.status_code == 403
+
+
+def test_profile_edit_rejects_missing_csrf_token(client):
+    with client.session_transaction() as session:
+        session['_user_id'] = '1'
+        session['_fresh'] = True
+
+    response = client.post('/profiles/1/edit', data={'about': 'changed'})
+
+    assert response.status_code == 400
+
+
+def test_app_requires_configured_secret_key(monkeypatch):
+    monkeypatch.setattr(Config, 'SECRET_KEY', None)
+
+    with pytest.raises(RuntimeError, match='SECRET_KEY must be configured'):
+        create_app()
