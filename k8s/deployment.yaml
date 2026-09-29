@@ -23,6 +23,13 @@ spec:
         ports:
         - containerPort: 7000
         env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: company-website-secrets
+              key: SECRET_KEY
+        - name: SESSION_COOKIE_SECURE
+          value: "false"
         - name: FLASK_DEBUG
           value: "false"
         livenessProbe:

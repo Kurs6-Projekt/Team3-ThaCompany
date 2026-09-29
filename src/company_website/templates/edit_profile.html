@@ -8,6 +8,7 @@
     <p>Editing profile for <strong>{{ user.first_name }} {{ user.last_name }}</strong> ({{ user.username }})</p>
 
     <form id="profileEditForm" method="POST" action="{{ url_for('main.edit_profile', id=user.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label class="form-label" for="first_name">First Name</label>
             <input class="form-input" type="text" id="first_name" name="first_name" value="{{ user.first_name or '' }}">
@@ -69,7 +70,10 @@
                 const response = await fetch(previewSignatureButton.dataset.previewUrl, {
                     method: 'POST',
                     body: previewData,
-                    headers: { 'Accept': 'application/json' }
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                    }
                 });
                 if (!response.ok) throw new Error('Preview request failed');
                 const result = await response.json();

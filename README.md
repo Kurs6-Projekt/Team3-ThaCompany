@@ -12,12 +12,22 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Copy the environment file and run the app:
+Generate a private key for local development, then run the app:
 
 ```bash
-cp .env.example .env
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+export PYTHONPATH=src
 python wsgi.py
 ```
+
+For Docker Compose, put the generated `SECRET_KEY` in the local `.env` file (never commit it), then run `docker compose up --build`.
+For Kubernetes, create a GitHub Actions secret named `APP_SECRET_KEY` once. The deploy workflow copies it into the cluster as `company-website-secrets`:
+
+```bash
+openssl rand -hex 32 | gh secret set APP_SECRET_KEY --repo Kurs6-Projekt/Team3-ThaCompany
+```
+
+Set `SESSION_COOKIE_SECURE=true` when the site is served over HTTPS. The current internal HTTP ingress keeps it false; CSRF tokens and `SameSite=Lax` protect state-changing requests.
 
 Or with Flask CLI:
 
@@ -45,6 +55,8 @@ Run tests with pytest:
 ```bash
 pytest
 ```
+
+The test configuration supplies its own test-only `SECRET_KEY`.
 
 ## Project Structure
 
