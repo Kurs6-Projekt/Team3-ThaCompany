@@ -20,19 +20,27 @@ export PYTHONPATH=src
 python wsgi.py
 ```
 
-For Docker Compose, put the generated `SECRET_KEY` in the local `.env` file (never commit it), then run `docker compose up --build`.
-For Kubernetes, create a GitHub Actions secret named `APP_SECRET_KEY` once. The deploy workflow copies it into the cluster as `company-website-secrets`:
+`SECRET_KEY` is required; the app stops at startup if it is missing. For Docker Compose, export one in the shell before starting the container:
 
 ```bash
-openssl rand -hex 32 | gh secret set APP_SECRET_KEY --repo Kurs6-Projekt/Team3-ThaCompany
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+docker compose up --build
 ```
 
-Set `SESSION_COOKIE_SECURE=true` when the site is served over HTTPS. The current internal HTTP ingress keeps it false; CSRF tokens and `SameSite=Lax` protect state-changing requests.
+Never commit a real key or put it in a tracked file.
+
+## Security configuration
+
+- The GitHub Actions secret `APP_SECRET_KEY` supplies the deployed app key. The deploy workflow syncs it into Kubernetes as `company-website-secrets`; do not create a separate copy by hand.
+- To configure it in another clone, generate and upload a key with `openssl rand -hex 32 | gh secret set APP_SECRET_KEY --repo Kurs6-Projekt/Team3-ThaCompany`. Rotating it signs users out.
+- CSRF protection is enabled globally for state-changing requests. Forms include a token, and the email preview request sends it in the `X-CSRFToken` header.
+- Session cookies are `HttpOnly` and `SameSite=Lax`. Set `SESSION_COOKIE_SECURE=true` when the site is served over HTTPS. It is currently `false` because the internal ingress uses HTTP.
 
 Or with Flask CLI:
 
 ```bash
 export PYTHONPATH=src
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 flask --app company_website run --port 7000
 ```
 
