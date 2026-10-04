@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sbom-vulnerability-scanner
+  namespace: security-tools
+spec:
+  schedule: "0 12 * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: sbom-scanner-sa
+          restartPolicy: OnFailure
+          containers:
+          - name: scanner
+            image: alpine:3.24
+            env:
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sbom-vulnerability-scanner-secrets
+                  key: discord-webhook-url
+            # --- Team Configurable Variables ---
+            - name: TARGET_NAMESPACE
+              value: "default"
+            - name: LABEL_SELECTOR
+              value: "app=company-website"
+            - name: FALLBACK_IMAGE
+              value: "ghcr.io/kurs6-projekt/team3-thacompany:latest"
+            # ------------------------------------
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              # Install dependencies
+              apk add --no-cache curl jq cosign
+              
+              # Install Trivy
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              
+              # Query Kubernetes API using environment variables
+              APISERVER="https://kubernetes.default.svc"
+              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              CA_CERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              
+              echo "[*] Inspecting namespace '${TARGET_NAMESPACE}' for label '${LABEL_SELECTOR}'..."
+              POD_JSON=$(curl -s --cacert "$CA_CERT" -H "Authorization: Bearer $TOKEN" \
+                "$APISERVER/api/v1/namespaces/${TARGET_NAMESPACE}/pods?labelSelector=${LABEL_SELECTOR}")
+                
+              IMAGE_ID=$(echo "$POD_JSON" | jq -r '.items[0].status.containerStatuses[0].imageID // empty')
+              
+              if [ -n "$IMAGE_ID" ]; then
+                IMAGE=$(echo "$IMAGE_ID" | sed 's|^.*://||')
+                echo "[+] Target acquired from running pod (Digest): $IMAGE"
+              else
+                echo "[!] Warning: No active pod found. Falling back to: ${FALLBACK_IMAGE}"
+                IMAGE="${FALLBACK_IMAGE}"
+              fi
+              
+              # Fetch SBOM
+              cosign download attestation --predicate-type=https://cyclonedx.org/bom "$IMAGE" \
+                | jq -r .payload | base64 -d | jq .predicate > /tmp/sbom.json
+              
+              # Scan with Trivy (ignoring unfixed)
+              trivy sbom /tmp/sbom.json --format json --ignore-unfixed -o /tmp/trivy-report.json
+              
+              # Count High/Critical issues
+              HIGH_CRIT_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length' /tmp/trivy-report.json)
+              if [ -z "$HIGH_CRIT_COUNT" ]; then HIGH_CRIT_COUNT=0; fi
+              
+              # Route to Discord based on findings
+              if [ "$HIGH_CRIT_COUNT" -eq 0 ]; then
+                PAYLOAD='{"embeds": [{
+                  "title": "🟢 Supply Chain Scan: All Clear", 
+                  "description": "No High or Critical vulnerabilities were detected in running workload:\n`'${IMAGE}'`.", 
+                  "color": 3066993, 
+                  "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
+                }]}'
+                curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+              else
+                trivy sbom /tmp/sbom.json --severity HIGH,CRITICAL --ignore-unfixed > /tmp/trivy-report.txt
+                PAYLOAD_JSON='{"embeds": [{
+                  "title": "🚨 Supply Chain Alert: Vulnerabilities Found", 
+                  "description": "Found **'${HIGH_CRIT_COUNT}'** High/Critical vulnerabilities in running workload:\n`'${IMAGE}'`.\nSee attached report for details.", 
+                  "color": 15158332, 
+                  "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
+                }]}'
+                curl -X POST -F "payload_json=$PAYLOAD_JSON" -F "file=@/tmp/trivy-report.txt" "$WEBHOOK_URL"
+              fi
