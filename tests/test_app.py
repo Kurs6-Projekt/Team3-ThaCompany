@@ -1,6 +1,7 @@
 import re
 
 import pytest
+from flask import template_rendered
 from company_website import create_app
 from company_website.config import Config
 from company_website.models import User
@@ -107,6 +108,26 @@ def test_profile_edit_forbids_other_users(client, method):
         response = client.get('/profiles/4/edit')
 
     assert response.status_code == 403
+
+
+def test_view_profile_hides_other_users_internal_notes(app, client):
+    with client.session_transaction() as session:
+        session['_user_id'] = '1'
+        session['_fresh'] = True
+
+    rendered = []
+
+    def record(sender, template, context, **extra):
+        rendered.append(context['user'])
+
+    with template_rendered.connected_to(record, app):
+        other = client.get('/profiles/4')
+        own = client.get('/profiles/1')
+
+    assert other.status_code == 200
+    assert own.status_code == 200
+    assert rendered[0].internal_notes is None
+    assert rendered[1].internal_notes
 
 
 def test_profile_edit_rejects_missing_csrf_token(client):

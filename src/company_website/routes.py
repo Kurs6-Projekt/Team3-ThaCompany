@@ -54,6 +54,8 @@ def view_profile(id):
     conn.close()
     if not row:
         return "User not found", 404
+    # Internal notes are private, only send them for the user's own profile.
+    is_own_profile = str(row['id']) == str(current_user.id)
     user = User(
         str(row['id']),
         row['username'],
@@ -63,7 +65,7 @@ def view_profile(id):
         row['email'],
         row['about'],
         row['role'],
-        row['internal_notes'],
+        row['internal_notes'] if is_own_profile else None,
         row['email_signature'],
     )
     return render_template('view_profile.html', user=user)
