@@ -29,6 +29,8 @@ spec:
               value: "app=company-website"
             - name: FALLBACK_IMAGE
               value: "ghcr.io/kurs6-projekt/team3-thacompany:latest"
+            - name: TRIVY_VERSION
+              value: "0.75.0"
             # ------------------------------------
             command:
             - /bin/sh
@@ -40,8 +42,9 @@ spec:
               # Install dependencies
               apk add --no-cache curl jq cosign
               
-              # Install Trivy
-              curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              # Install the explicitly pinned Trivy release.
+              curl -fsSL "https://raw.githubusercontent.com/aquasecurity/trivy/v${TRIVY_VERSION}/contrib/install.sh" \
+                | sh -s -- -b /usr/local/bin "v${TRIVY_VERSION}"
               
               # Query Kubernetes API using environment variables
               APISERVER="https://kubernetes.default.svc"
@@ -63,16 +66,19 @@ spec:
                 IMAGE="${FALLBACK_IMAGE}"
               fi
               
-              # Fetch SBOM
-              cosign download attestation --predicate-type=https://cyclonedx.org/bom "$IMAGE" \
-                > /tmp/attestations.json
-              jq -er '.payload' /tmp/attestations.json \
+              # Verify the GitHub OIDC identity before trusting the SBOM.
+              cosign verify-attestation \
+                --type cyclonedx \
+                --certificate-identity-regexp '^https://github\.com/Kurs6-Projekt/Team3-ThaCompany/\.github/workflows/deploy\.yml@refs/heads/main$' \
+                --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+                "$IMAGE" > /tmp/verified-attestations.json
+              jq -er '.payload' /tmp/verified-attestations.json \
                 | base64 -d \
                 | jq -e '.predicate' > /tmp/sbom.json
               test -s /tmp/sbom.json
               
-              # Scan with Trivy (ignoring unfixed)
-              trivy sbom /tmp/sbom.json --format json --ignore-unfixed -o /tmp/trivy-report.json
+              # Include both fixable and currently unfixed vulnerabilities.
+              trivy sbom /tmp/sbom.json --format json -o /tmp/trivy-report.json
               
               # Count High/Critical issues
               HIGH_CRIT_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length' /tmp/trivy-report.json)
@@ -88,7 +94,7 @@ spec:
                 }]}'
                 curl -fsS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
               else
-                trivy sbom /tmp/sbom.json --severity HIGH,CRITICAL --ignore-unfixed > /tmp/trivy-report.txt
+                trivy sbom /tmp/sbom.json --severity HIGH,CRITICAL > /tmp/trivy-report.txt
                 PAYLOAD_JSON='{"embeds": [{
                   "title": "🚨 Supply Chain Alert: Vulnerabilities Found", 
                   "description": "Found **'${HIGH_CRIT_COUNT}'** High/Critical vulnerabilities in running workload:\n`'${IMAGE}'`.\nSee attached report for details.", 
