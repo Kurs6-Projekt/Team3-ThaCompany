@@ -1,140 +1,205 @@
 # Säkerhetsgranskning av company-website
 
+**Senast uppdaterad:** 2026-10-05
+**Omfattning:** Flask-applikation, beroenden, container, Kubernetes, GitHub Actions och körande labbmiljö
+
 ## Sammanfattning
 
-Granskningen identifierade fyra säkerhetsproblem i den fiktiva webbapplikationen `company-website`: SQL-injektion i inloggningen, bristande åtkomstkontroll för användarprofiler samt två fall där känslig information kan hämtas från Git-historik eller en remote-branch.
+De tidigare applikationsfynden SQL-injektion, IDOR, SSTI, förutsägbar Flask-nyckel och saknat CSRF-skydd är åtgärdade. Den aktuella Python-koden klarade tester och automatiska säkerhetskontroller utan nya kodfynd.
 
-Testerna genomfördes inom den auktoriserade CTF-labbmiljön. Webbtesterna är avgränsade till `http://10.0.3.3/`. Inga applikationsfiler eller databasposter ändrades under verifieringen.
+De största kvarvarande riskerna finns i leverans- och driftkedjan. `main` saknar branch protection samtidigt som deployment-workflowen har tillgång till Headscale, Kubernetes och GitHub Container Registry. Kubernetes använder dessutom en långlivad deploy-token med bred behörighet i `default`-namespace. Tillsammans innebär det att ett komprometterat GitHub-konto med pushrättighet kan leda till kontroll över applikationens namespace.
 
-## Omfattning
+SBOM-scannern ger värdefull övervakning, men kör ett installationsskript direkt från en extern `main`-branch och verifierar inte SBOM-attesteringens identitet innan den skannas. Applikationscontainern kör som root, får en onödig Kubernetes-token och saknar flera grundläggande skydd.
 
-- Flask-applikationens Python-kod och HTML-mallar
-- SQLite-migrationer och seed-data
-- Git-historik och remote-branches
-- Docker-, Kubernetes- och GitHub Actions-konfiguration
+## Genomförd verifiering
 
-## Registrerade säkerhetsärenden
+Granskningen utfördes mot senaste `main` och den auktoriserade Team 3-labbmiljön.
 
-| Issue | Fynd | Status |
+| Kontroll | Resultat |
+|---|---|
+| Pytest | 20 tester godkända |
+| pip-audit | Inga kända sårbara Python-beroenden |
+| Bandit | Inga Python-kodfynd |
+| Semgrep | 0 fynd från 208 regler |
+| Checkov | 42 Kubernetes-/containerfynd, sammanförda till riskerna nedan |
+| Dependabot | Inga öppna alerts |
+| Branch protection | Saknas på `main` |
+| Körande container | Kör som `root` och har service-account-token monterad |
+| Sessionscookie | `HttpOnly` och `SameSite=Lax`, men saknar `Secure` |
+
+Inga produktionsuppgifter, databasinnehåll eller secrets ändrades under verifieringen.
+
+## Tidigare registrerade säkerhetsärenden
+
+| Issue | Fynd | Aktuell status |
 |---|---|---|
-| [#1 SQL Injection in login endpoint](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/1) | SQL-injektion i inloggningen | Verifierad i labbmiljön |
-| [#2 IDOR allows access to another employee's private profile](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/2) | Bristande åtkomstkontroll för profiler | Verifierad – ej patchad av säkerhetsteamet |
-| [#3 Sensitive flag exposed in Git history](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/3) | Känslig information i Git-historiken | Verifierad – ej patchad av säkerhetsteamet |
-| [#4 Sensitive file exposed through unmerged Git branch](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/4) | Känslig information på en separat Git-branch | Verifierad – ej patchad av säkerhetsteamet |
+| [#1](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/1) | SQL-injektion i inloggningen | Åtgärdad med parametriserad fråga och lösenordskontroll |
+| [#2](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/2) | IDOR för användarprofiler | Åtgärdad med ägarskapskontroll |
+| [#3](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/3) | CTF-flagga i Git-historik | Issue stängd; objektet finns kvar i nåbar historik |
+| [#4](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/4) | CTF-flagga på remote-branch | Åtgärdad; den berörda remote-branchen finns inte längre |
+| [#16](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/16) | Förutsägbar Flask `SECRET_KEY` | Åtgärdad med GitHub- och Kubernetes-secret |
+| [#17](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/17) | Saknat CSRF-skydd | Åtgärdad med Flask-WTF och CSRF-token |
 
-## Fynd 1: SQL Injection in login endpoint
+Historiska CTF-flaggor ska betraktas som övningsdata. Om samma metod någon gång exponerar en riktig hemlighet måste hemligheten roteras även om Git-historiken senare rensas.
 
-**Allvarlighetsgrad:** Kritisk  
-**Endpoint:** `POST /login`  
-**Relevant kod:** `src/company_website/auth.py`, funktionen `login()`  
-**GitHub-issue:** [#1](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/1)  
-**Status:** Verifierad i labbmiljön
+## Kvarvarande fynd
 
-### Beskrivning
+### Fynd 1: Oskyddad main-branch och långlivad Kubernetes-token
 
-Användarnamn och lösenord läggs direkt i en SQL-sträng. En angripare kan därför ändra databasfrågan, kringgå autentiseringen och läsa data ur databasen. Flaggan lagras i kolumnen `password_hash` för användaren `flag`.
+**Allvarlighetsgrad:** Kritisk
+**Berörda filer:** `.github/workflows/deploy.yml`, `k8s/github-permissions.yaml`, `scripts/generate-kubeconfig.sh`
+**Status:** Öppen
 
-### Verifiering
+En push till `main` startar deployment-workflowen. `main` saknar branch protection och workflowen får tillgång till `HEADSCALE_API_KEY`, `KUBECONFIG`, `APP_SECRET_KEY`, GHCR och GitHub OIDC.
 
-```bash
-curl -sS -X POST 'http://10.0.3.3/login' \
-  --data-urlencode "username=' UNION SELECT 1,password_hash,'x',NULL,NULL,NULL,NULL,NULL,NULL FROM users WHERE username='flag' -- " \
-  --data-urlencode 'password=x' |
-grep -o 'ITSX25{[^}]*}'
-```
-
-### Rekommenderad åtgärd
-
-Använd en parametriserad SQL-fråga för uppslagning av användaren och kontrollera därefter lösenordet med `check_password_hash`. Returnera inte databasfel till klienten.
-
-## Fynd 2: IDOR allows access to another employee's private profile
-
-**Allvarlighetsgrad:** Hög  
-**Endpoint:** `GET/POST /profiles/<id>/edit`  
-**Relevant kod:** `src/company_website/routes.py`, funktionen `edit_profile()`  
-**GitHub-issue:** [#2](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/2)  
-**Status:** Verifierad – ej patchad av säkerhetsteamet
-
-### Beskrivning
-
-Routen kräver inloggning men kontrollerar inte att profilens ID tillhör den inloggade användaren. En användare kan därför läsa och ändra en annan användares profil och privata `internal_notes`. Bobs profil, ID 4, innehåller CTF-flaggan.
-
-### Verifiering
-
-```bash
-curl -sS -c /tmp/ctf-cookies \
-  -X POST 'http://10.0.3.3/login' \
-  --data-urlencode "username=' OR username='dev' -- " \
-  --data-urlencode 'password=x' \
-  -o /dev/null
-
-curl -sS -b /tmp/ctf-cookies \
-  'http://10.0.3.3/profiles/4/edit' |
-grep -o 'ITSX25{[^}]*}'
-```
-
-### Rekommenderad åtgärd
-
-Kontrollera att `str(current_user.id) == str(id)` innan profilen läses eller ändras. Returnera HTTP 403 när användaren saknar behörighet. Lägg även till CSRF-skydd för ändringsformuläret.
-
-## Fynd 3: Sensitive flag exposed in Git history
-
-**Allvarlighetsgrad:** Hög  
-**Relevant fil:** `flag.txt` i commit `f55b82d`  
-**GitHub-issue:** [#3](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/3)  
-**Status:** Verifierad – ej patchad av säkerhetsteamet
-
-### Beskrivning
-
-En känslig fil har tagits bort från den aktuella versionen men finns fortfarande kvar i Git-historiken. Att radera en fil i en senare commit tar inte bort äldre kopior.
-
-### Verifiering
-
-```bash
-git show f55b82d:flag.txt
-```
-
-Observerad CTF-flagga:
+Kubeconfig-filen använder en manuellt skapad `kubernetes.io/service-account-token`. Den körande tokenen skapades 2026-09-21 och är fortfarande giltig. Följande behörigheter verifierades för `github-deployer` i `default`-namespace:
 
 ```text
-ITSX25{g1t_n3v3r_f0rg3t5_y0ur_m1st4k3s}
+get secrets:    yes
+delete secrets: yes
+create pods:    yes
 ```
 
-### Rekommenderad åtgärd
+Kontot kan även skapa, uppdatera och radera deployments, services, PVC:er och ingress-resurser. En angripare som får tillgång till workflow-secrets kan därför läsa applikationshemligheter och köra egna workloads i namespace.
 
-Rotera alltid exponerade hemligheter. Rensa historiken med ett lämpligt verktyg, exempelvis `git filter-repo`, och uppdatera remote-repot enligt organisationens rutin.
+**Rekommenderad åtgärd:**
 
-## Fynd 4: Sensitive file exposed through unmerged Git branch
+- Aktivera branch protection med obligatorisk PR, godkända tester och granskare.
+- Använd ett GitHub Environment med godkännande för deployment.
+- Ersätt den permanenta Kubernetes-tokenen med kortlivad autentisering.
+- Ta bort `list`, `watch` och `delete` för secrets och övriga verbs som deploymenten inte behöver.
+- Förkonfigurera applikationssecreten utanför den vanliga deployrollen.
 
-**Allvarlighetsgrad:** Hög  
-**Branch:** `origin/chore/dependency-audit`  
-**Relevant fil:** `flag.txt`  
-**GitHub-issue:** [#4](https://github.com/Kurs6-Projekt/Team3-ThaCompany/issues/4)  
-**Status:** Verifierad – ej patchad av säkerhetsteamet
+### Fynd 2: SBOM-scannern kör extern kod från en rörlig branch
 
-### Beskrivning
+**Allvarlighetsgrad:** Hög
+**Berörd fil:** `k8s/sbom-scanner/scanner-cronjob.yaml`
+**Status:** Öppen
 
-En fil med känslig information finns på en remote-branch som inte är utcheckad lokalt. Alla som kan läsa repot kan fortfarande läsa branchens innehåll.
-
-### Verifiering
+CronJoben installerar Trivy vid varje körning med följande mönster:
 
 ```bash
-git show origin/chore/dependency-audit:flag.txt
+curl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
 ```
 
-Observerad CTF-flagga:
+Innehållet i den externa `main`-branchen kan förändras utan någon ändring i Team 3-repot. Ett komprometterat upstream-repo eller installationsskript ger kodkörning i scanner-podden. Podden kör som root och får Discord-webhooken som miljövariabel.
+
+**Rekommenderad åtgärd:** Bygg en egen scanner-image med bestämda versioner av Trivy, Cosign, curl och jq. Signera imagen och referera till den med digest.
+
+### Fynd 3: Sårbarhetskontrollen sker efter deployment
+
+**Allvarlighetsgrad:** Hög
+**Berörda filer:** `.github/workflows/deploy.yml`, `k8s/sbom-scanner/scanner-cronjob.yaml`
+**Status:** Öppen
+
+Deploy-workflowen bygger, signerar och driftsätter imagen. CronJoben skannar den körande imagen senare enligt ett dagligt schema. En image med en känd High/Critical-sårbarhet kan därför vara aktiv fram till nästa lyckade scannerkörning. Om CronJoben misslyckas skickas inget särskilt driftlarm till Discord.
+
+**Rekommenderad åtgärd:** Kör Trivy mot imagen eller den genererade SBOM-filen i CI och stoppa deployment vid överenskommen nivå. Behåll CronJoben för återkommande kontroll och lägg till larm för misslyckade scannerjobb.
+
+### Fynd 4: SBOM-attesteringen verifieras inte
+
+**Allvarlighetsgrad:** Medel
+**Berörd fil:** `k8s/sbom-scanner/scanner-cronjob.yaml`
+**Status:** Öppen
+
+Scannern använder `cosign download attestation`, avkodar innehållet och skickar det direkt till Trivy. Kommandot kontrollerar inte att attesteringen signerades av Team 3:s godkända GitHub-workflow. En felaktig eller manipulerad attestation kan därmed ge missvisande scannerresultat.
+
+**Rekommenderad åtgärd:** Använd `cosign verify-attestation` med GitHubs OIDC issuer och den exakta workflow-identiteten. Skanna endast predicate-data från en godkänd verifiering.
+
+### Fynd 5: Applikationscontainern kör som root och har onödig API-token
+
+**Allvarlighetsgrad:** Medel
+**Berörda filer:** `Dockerfile`, `k8s/deployment.yaml`
+**Status:** Öppen
+
+Den körande applikationscontainern verifierades med följande resultat:
 
 ```text
-ITSX25{th3_1nv1s1bl3_br4nch_0f_s3cr3ts}
+uid=0(root) gid=0(root)
+service-account-token-mounted
 ```
 
-### Rekommenderad åtgärd
+Applikationen behöver inte Kubernetes API. Default-kontot har begränsad åtkomst, men tokenen ger API-discovery och ökar angreppsytan. Deploymenten saknar även seccomp-profil, capability-begränsning, skydd mot privilege escalation och resursgränser.
 
-Rotera exponerade hemligheter, ta bort filen från branchens historik och radera branchen om den inte längre behövs. Inför secret scanning och pre-commit-kontroller.
+**Rekommenderad åtgärd:**
 
-## Prioritering
+```yaml
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: web
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+```
 
-1. Åtgärda SQL-injektionen och rotera exponerade uppgifter.
-2. Lägg till ägarskapskontroll och CSRF-skydd för profilredigering.
-3. Rensa känslig information från Git-historik och remote-branches.
-4. Lägg till automatiska tester för autentisering och behörighetskontroll.
+Skapa dessutom en användare med högt UID i Docker-imagen och ange CPU-/minnesgränser.
+
+### Fynd 6: Okrypterad HTTP och sessionscookie utan Secure
+
+**Allvarlighetsgrad:** Medel
+**Berörda filer:** `k8s/ingress.yaml`, `k8s/deployment.yaml`, `src/company_website/config.py`
+**Status:** Öppen
+
+Applikationen exponeras via HTTP. Live-svaret satte sessionscookien med `HttpOnly` och `SameSite=Lax`, men utan attributet `Secure`. Deploymenten sätter uttryckligen `SESSION_COOKIE_SECURE=false`.
+
+**Rekommenderad åtgärd:** Aktivera TLS på ingressen och sätt `SESSION_COOKIE_SECURE=true`. Lägg även till HSTS när all åtkomst använder HTTPS.
+
+### Fynd 7: NetworkPolicy och resursgränser saknas
+
+**Allvarlighetsgrad:** Medel
+**Berörda filer:** `k8s/deployment.yaml`, saknad NetworkPolicy
+**Status:** Öppen
+
+Klustret har inga NetworkPolicies. En komprometterad pod kan därför försöka nå andra pods, Kubernetes-tjänster och VPC-resurser. Det saknas även LimitRange och ResourceQuota, och containrarna saknar egna requests/limits. Detta ökar risken för lateral rörelse och resursbaserad överbelastning.
+
+**Rekommenderad åtgärd:** Inför default-deny i applikationens namespace och tillåt endast trafik från ingress-nginx samt dokumenterad utgående trafik. Ange rimliga CPU- och minnesgränser.
+
+### Fynd 8: GitHub Actions är inte låsta till commit-SHA
+
+**Allvarlighetsgrad:** Medel
+**Berörda filer:** `.github/workflows/deploy.yml`, `.github/workflows/tests.yml`
+**Status:** Öppen
+
+Externa Actions refereras med flyttbara versionstaggar som `@v4`, `@v6` och `@v7`. Repot tillåter alla GitHub Actions och kräver inte SHA-pinning. En komprometterad eller flyttad tagg kan påverka bygget och få tillgång till jobbets tokens och secrets.
+
+**Rekommenderad åtgärd:** Lås varje extern Action till fullständig commit-SHA och använd Dependabot för kontrollerade uppdateringar. Begränsa tillåtna Actions i repository-inställningarna.
+
+### Fynd 9: Inloggningen saknar rate limiting och använder delat labbkonto
+
+**Allvarlighetsgrad:** Låg/medel
+**Berörd kod:** `src/company_website/auth.py`
+**Status:** Öppen
+
+Inloggningen saknar begränsning av upprepade försök. Det dokumenterade kontot `dev` delas av flera användare, vilket försämrar spårbarheten. I den nuvarande Tailnet-avgränsade labbmiljön är risken lägre än för en publik tjänst.
+
+**Rekommenderad åtgärd:** Skapa personliga konton, inför rate limiting och logga misslyckade inloggningsförsök utan att logga lösenord.
+
+### Fynd 10: Säkerhetsheaders saknas
+
+**Allvarlighetsgrad:** Låg
+**Berörda komponenter:** Flask och ingress-nginx
+**Status:** Öppen
+
+Live-svaren saknar Content Security Policy, `X-Content-Type-Options`, frame-skydd och `Referrer-Policy`.
+
+**Rekommenderad åtgärd:** Sätt en anpassad CSP och övriga headers i ingress-nginx eller med Flask-Talisman. Verifiera att CSP:n tillåter applikationens befintliga CSS och JavaScript innan den görs blockerande.
+
+## Prioriterad åtgärdsordning
+
+1. Skydda `main`, inför deployment-godkännande och ersätt den långlivade Kubernetes-tokenen.
+2. Flytta sårbarhetsscanningen till CI och bygg en versionslåst scanner-image.
+3. Verifiera SBOM-attesteringen kryptografiskt.
+4. Kör applikationen utan root och utan service-account-token.
+5. Inför TLS, säkra sessionscookies och NetworkPolicy.
+6. Lås GitHub Actions till SHA och lägg till resursgränser.
+7. Inför rate limiting och säkerhetsheaders.
+
+## Avgränsning för framtida pentestmiljö
+
+Om en sårbar och en patchad version ska köras parallellt bör de använda separata namespaces, databaser, service accounts och hostnames. Den sårbara versionen ska endast innehålla avsiktliga applikationssårbarheter. Infrastrukturens secrets, Kubernetes API och molnidentiteter ska inte vara åtkomliga från pentestcontainern.
