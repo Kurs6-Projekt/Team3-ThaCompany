@@ -19,7 +19,9 @@ def load_user(user_id):
     cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
-    if row:
+    # Re-check account state on every authenticated request. Otherwise a user
+    # who is disabled after signing in keeps access until their cookie expires.
+    if row and row['enabled']:
         return User(
             str(row['id']),
             row['username'],
