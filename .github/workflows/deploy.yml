@@ -160,3 +160,6 @@ jobs:
           kubectl delete ingress company-website --ignore-not-found
           kubectl apply -f /tmp/deployment.yaml -f k8s/pvc.yaml -f k8s/service.yaml -f k8s/ingress.yaml
           kubectl rollout status deployment/company-website --timeout=120s
+
+      - name: Apply vulnerability scanner configuration
+        run: kubectl apply -f k8s/sbom-scanner/scanner-cronjob.yaml

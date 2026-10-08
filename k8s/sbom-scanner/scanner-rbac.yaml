@@ -25,3 +25,29 @@ roleRef:
   kind: ClusterRole
   name: sbom-scanner-pod-reader
   apiGroup: rbac.authorization.k8s.io
+---
+# Bootstrap permission: the regular deploy pipeline may update only the
+# scanner CronJob in security-tools. It cannot read the Discord Secret.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-deployer-scanner-role
+  namespace: security-tools
+rules:
+- apiGroups: ["batch"]
+  resources: ["cronjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-deployer-scanner-binding
+  namespace: security-tools
+subjects:
+- kind: ServiceAccount
+  name: github-deployer
+  namespace: default
+roleRef:
+  kind: Role
+  name: github-deployer-scanner-role
+  apiGroup: rbac.authorization.k8s.io
