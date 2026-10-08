@@ -4,6 +4,7 @@ import pytest
 from flask import template_rendered
 from company_website import create_app
 from company_website.config import Config
+from company_website.db import get_db
 from company_website.models import User
 from company_website.routes import _contains_blocked_email_syntax, _render_email_preview
 
@@ -36,6 +37,23 @@ def test_login_page(client):
 def test_profile_redirects_when_not_logged_in(client):
     response = client.get('/profile', follow_redirects=False)
     assert response.status_code == 302
+
+
+def test_disabled_user_existing_session_is_rejected(app, client):
+    with client.session_transaction() as session:
+        session['_user_id'] = '1'
+        session['_fresh'] = True
+
+    with app.app_context():
+        conn = get_db()
+        conn.execute("UPDATE users SET enabled = 0 WHERE id = 1")
+        conn.commit()
+        conn.close()
+
+    response = client.get('/profile', follow_redirects=False)
+
+    assert response.status_code == 302
+    assert '/login' in response.headers['Location']
 
 
 def test_employees_redirects_when_not_logged_in(client):

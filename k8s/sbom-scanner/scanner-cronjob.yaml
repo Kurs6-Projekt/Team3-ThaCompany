@@ -34,13 +34,14 @@ spec:
             - /bin/sh
             - -c
             - |
-              set -e
+              set -eu
+              set -o pipefail
               
               # Install dependencies
               apk add --no-cache curl jq cosign
               
               # Install Trivy
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
               
               # Query Kubernetes API using environment variables
               APISERVER="https://kubernetes.default.svc"
@@ -48,8 +49,9 @@ spec:
               CA_CERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
               
               echo "[*] Inspecting namespace '${TARGET_NAMESPACE}' for label '${LABEL_SELECTOR}'..."
-              POD_JSON=$(curl -s --cacert "$CA_CERT" -H "Authorization: Bearer $TOKEN" \
+              POD_JSON=$(curl -fsS --cacert "$CA_CERT" -H "Authorization: Bearer $TOKEN" \
                 "$APISERVER/api/v1/namespaces/${TARGET_NAMESPACE}/pods?labelSelector=${LABEL_SELECTOR}")
+              echo "$POD_JSON" | jq -e '.items | type == "array"' > /dev/null
                 
               IMAGE_ID=$(echo "$POD_JSON" | jq -r '.items[0].status.containerStatuses[0].imageID // empty')
               
@@ -63,7 +65,11 @@ spec:
               
               # Fetch SBOM
               cosign download attestation --predicate-type=https://cyclonedx.org/bom "$IMAGE" \
-                | jq -r .payload | base64 -d | jq .predicate > /tmp/sbom.json
+                > /tmp/attestations.json
+              jq -er '.payload' /tmp/attestations.json \
+                | base64 -d \
+                | jq -e '.predicate' > /tmp/sbom.json
+              test -s /tmp/sbom.json
               
               # Scan with Trivy (ignoring unfixed)
               trivy sbom /tmp/sbom.json --format json --ignore-unfixed -o /tmp/trivy-report.json
@@ -80,7 +86,7 @@ spec:
                   "color": 3066993, 
                   "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
                 }]}'
-                curl -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+                curl -fsS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
               else
                 trivy sbom /tmp/sbom.json --severity HIGH,CRITICAL --ignore-unfixed > /tmp/trivy-report.txt
                 PAYLOAD_JSON='{"embeds": [{
@@ -89,5 +95,5 @@ spec:
                   "color": 15158332, 
                   "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
                 }]}'
-                curl -X POST -F "payload_json=$PAYLOAD_JSON" -F "file=@/tmp/trivy-report.txt" "$WEBHOOK_URL"
+                curl -fsS -X POST -F "payload_json=$PAYLOAD_JSON" -F "file=@/tmp/trivy-report.txt" "$WEBHOOK_URL"
               fi
