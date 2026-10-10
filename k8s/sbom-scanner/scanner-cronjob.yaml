@@ -13,9 +13,18 @@ spec:
         spec:
           serviceAccountName: sbom-scanner-sa
           restartPolicy: OnFailure
+          volumes:
+          - name: trivyignore
+            configMap:
+              name: sbom-scanner-trivyignore
           containers:
           - name: scanner
             image: alpine:3.24
+            volumeMounts:
+            - name: trivyignore
+              mountPath: /etc/trivy/.trivyignore.yaml
+              subPath: .trivyignore.yaml
+              readOnly: true
             env:
             - name: WEBHOOK_URL
               valueFrom:
@@ -77,27 +86,33 @@ spec:
                 | jq -e '.predicate' > /tmp/sbom.json
               test -s /tmp/sbom.json
               
-              # Include both fixable and currently unfixed vulnerabilities.
-              trivy sbom /tmp/sbom.json --format json -o /tmp/trivy-report.json
+              # Keep a complete inventory, but alert only on findings that have
+              # not been explicitly accepted with a time-limited exception.
+              trivy sbom /tmp/sbom.json --format json -o /tmp/trivy-report-all.json
+              trivy sbom /tmp/sbom.json --ignorefile /etc/trivy/.trivyignore.yaml \
+                --format json -o /tmp/trivy-report.json
               
               # Count High/Critical issues
               HIGH_CRIT_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length' /tmp/trivy-report.json)
               if [ -z "$HIGH_CRIT_COUNT" ]; then HIGH_CRIT_COUNT=0; fi
+              ALL_HIGH_CRIT_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length' /tmp/trivy-report-all.json)
+              SUPPRESSED_COUNT=$((ALL_HIGH_CRIT_COUNT - HIGH_CRIT_COUNT))
               
               # Route to Discord based on findings
               if [ "$HIGH_CRIT_COUNT" -eq 0 ]; then
                 PAYLOAD='{"embeds": [{
                   "title": "🟢 Supply Chain Scan: All Clear", 
-                  "description": "No High or Critical vulnerabilities were detected in running workload:\n`'${IMAGE}'`.", 
+                  "description": "No unaccepted High or Critical vulnerabilities were detected in running workload:\n`'${IMAGE}'`.\nReviewed, time-limited exceptions: **'${SUPPRESSED_COUNT}'** findings.",
                   "color": 3066993, 
                   "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
                 }]}'
                 curl -fsS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
               else
-                trivy sbom /tmp/sbom.json --severity HIGH,CRITICAL > /tmp/trivy-report.txt
+                trivy sbom /tmp/sbom.json --ignorefile /etc/trivy/.trivyignore.yaml \
+                  --severity HIGH,CRITICAL > /tmp/trivy-report.txt
                 PAYLOAD_JSON='{"embeds": [{
                   "title": "🚨 Supply Chain Alert: Vulnerabilities Found", 
-                  "description": "Found **'${HIGH_CRIT_COUNT}'** High/Critical vulnerabilities in running workload:\n`'${IMAGE}'`.\nSee attached report for details.", 
+                  "description": "Found **'${HIGH_CRIT_COUNT}'** unaccepted High/Critical vulnerabilities in running workload:\n`'${IMAGE}'`.\nReviewed exceptions: **'${SUPPRESSED_COUNT}'** findings. See attached report for details.",
                   "color": 15158332, 
                   "footer": {"text": "k3s Trivy CronJob • Automated Lab Check"}
                 }]}'
