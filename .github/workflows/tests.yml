@@ -33,3 +33,5 @@ jobs:
           docker run -d --name company-test -e SECRET_KEY=ci-only-test-key -p 127.0.0.1:7000:7000 company-test
           trap 'docker logs company-test; docker rm -f company-test' EXIT
           curl --fail --retry 15 --retry-all-errors --retry-delay 2 --max-time 5 http://127.0.0.1:7000/healthz
+          docker exec company-test python -c 'import os; assert os.getuid() == 10001; import sqlite3; c=sqlite3.connect("/app/data/database.db"); c.execute("CREATE TABLE IF NOT EXISTS runtime_write_test(id INTEGER)"); c.commit(); c.close()'
+          docker exec company-test python -c 'import ssl, sqlite3, ctypes, readline; print("Runtime modules OK")'
