@@ -1,11 +1,16 @@
-FROM python:3.13-slim
+FROM python:3.13.16-slim-trixie
+
+# Apply available Debian security updates when rebuilding.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Only runtime source belongs in the image, not local environments or reports.
+COPY src/ ./src/
+COPY wsgi.py ./wsgi.py
 
 ENV PYTHONPATH=/app/src
 ENV FLASK_APP=company_website

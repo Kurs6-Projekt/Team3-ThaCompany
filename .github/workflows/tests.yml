@@ -25,3 +25,10 @@ jobs:
 
       - name: Run tests
         run: PYTHONPATH=src python -m pytest -q
+
+      - name: Build and smoke-test runtime image
+        run: |
+          docker build --pull -t company-test .
+          docker run -d --name company-test -e SECRET_KEY=ci-only-test-key -p 127.0.0.1:7000:7000 company-test
+          trap 'docker logs company-test; docker rm -f company-test' EXIT
+          curl --fail --retry 15 --retry-connrefused --retry-delay 2 http://127.0.0.1:7000/healthz

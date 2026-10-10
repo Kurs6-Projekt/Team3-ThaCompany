@@ -56,6 +56,21 @@ The SQLite database is persisted in a Docker volume (`app-data`).
 
 For Kubernetes (k3s), replace the Docker volume with a PersistentVolumeClaim pointing to `/app/data`.
 
+## Scanner administration
+
+The application deploy identity must not manage workloads in `security-tools`.
+Changing a CronJob command can indirectly expose its mounted Discord secret,
+even when direct Secret reads are forbidden. Scanner updates are applied by an
+administrator on primary after review:
+
+```bash
+sudo kubectl apply -f k8s/sbom-scanner/scanner-rbac.yaml
+sudo kubectl apply -f k8s/sbom-scanner/scanner-cronjob.yaml
+```
+
+The empty legacy scanner Role and RoleBinding deliberately revoke old grants.
+The scheduled scanner continues to run with its own service account.
+
 ## Tests
 
 Run tests with pytest:
