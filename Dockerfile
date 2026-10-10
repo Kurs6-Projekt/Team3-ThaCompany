@@ -6,7 +6,8 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && python -m pip uninstall -y pip
 
 # Only runtime source belongs in the image, not local environments or reports.
 COPY src/ ./src/
