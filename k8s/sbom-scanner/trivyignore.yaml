@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbom-scanner-trivyignore
+  namespace: security-tools
+data:
+  .trivyignore.yaml: |
+    vulnerabilities:
+      - id: CVE-2026-76642
+        statement: "Accepted temporarily: Debian Trixie has no fixed package; container is non-root with all capabilities dropped."
+        expired_at: 2026-11-10
+      - id: CVE-2026-78408
+        statement: "Accepted temporarily: requires privileged nsenter use unavailable to the application container."
+        expired_at: 2026-11-10
+      - id: CVE-2026-78409
+        statement: "Accepted temporarily: requires privileged mount configuration unavailable to the application container."
+        expired_at: 2026-11-10
+      - id: CVE-2026-78410
+        statement: "Accepted temporarily: requires privileged mount configuration unavailable to the application container."
+        expired_at: 2026-11-10
+      - id: CVE-2026-54369
+        statement: "Accepted temporarily: no privileged ACL pathname operation is exposed by the application."
+        expired_at: 2026-11-10
+      - id: CVE-2025-69720
+        statement: "Accepted temporarily: vulnerable infocmp utility is not used by the application."
+        expired_at: 2026-11-10
+      - id: CVE-2026-16742
+        statement: "Accepted temporarily: systemd-homed is absent from the application container."
+        expired_at: 2026-11-10
+      - id: CVE-2026-9538
+        statement: "Accepted temporarily: Perl Archive::Tar is absent from the application container."
+        expired_at: 2026-11-10

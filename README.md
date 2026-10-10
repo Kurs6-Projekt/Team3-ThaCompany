@@ -65,6 +65,7 @@ administrator on primary after review:
 
 ```bash
 sudo kubectl apply -f k8s/sbom-scanner/scanner-rbac.yaml
+sudo kubectl apply -f k8s/sbom-scanner/trivyignore.yaml
 sudo kubectl apply -f k8s/sbom-scanner/scanner-cronjob.yaml
 ```
 
