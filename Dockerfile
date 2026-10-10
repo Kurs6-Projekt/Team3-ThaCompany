@@ -18,4 +18,5 @@ ENV FLASK_APP=company_website
 
 EXPOSE 7000
 
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:7000", "--access-logfile", "-", "wsgi:app"]
+# Initialize SQLite once before workers fork, avoiding concurrent migrations.
+CMD ["gunicorn", "--preload", "-w", "2", "-b", "0.0.0.0:7000", "--access-logfile", "-", "wsgi:app"]
