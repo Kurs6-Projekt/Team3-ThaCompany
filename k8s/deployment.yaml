@@ -16,8 +16,22 @@ spec:
         app: company-website
         git.commit: ${GIT_COMMIT}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        # Existing SQLite files are root-owned: request volume permission repair.
+        fsGroupChangePolicy: Always
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: web
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
         image: ${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
